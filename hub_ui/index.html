@@ -1422,9 +1422,9 @@ document.getElementById('tn-x').onclick=function(){box.style.display='none'};
 document.getElementById('tn-send').onclick=function(){
  var st=document.getElementById('tn-st'),t=document.getElementById('tn-tx').value;
  if(!drawn&&!t){st.textContent='Draw or type something first';return}
- var bg=document.createElement('canvas');bg.width=cv.width;bg.height=cv.height;var b=bg.getContext('2d');b.fillStyle='#1d2030';b.fillRect(0,0,bg.width,bg.height);b.drawImage(cv,0,0);
+ 
  st.textContent='Sending...';
- fetch('/api/tv/note',{method:'POST',headers:{'X-Hub-Token':token,'Content-Type':'application/json'},body:JSON.stringify({img:drawn?bg.toDataURL('image/png'):'',text:t})})
+ fetch('/api/tv/note',{method:'POST',headers:{'X-Hub-Token':token,'Content-Type':'application/json'},body:JSON.stringify({img:drawn?cv.toDataURL('image/png'):'',text:t})})
  .then(function(r){return r.json()}).then(function(j){if(j.ok){st.textContent='Sent to the TV';if(window.loadTv)loadTv();x.clearRect(0,0,cv.width,cv.height);drawn=false;document.getElementById('tn-tx').value=''}else{st.textContent='Could not reach the TV'}})
  .catch(function(){st.textContent='Could not send'})};
 })();

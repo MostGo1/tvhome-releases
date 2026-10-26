@@ -138,5 +138,5 @@ open(HTML, "w").write(new)
 
 subprocess.call("pkill -f app.py", shell=True)
 time.sleep(1)
-subprocess.Popen("cd /opt/hub && nohup venv/bin/python3 app.py > /tmp/hub.log 2>&1 &", shell=True)
+subprocess.Popen("cd /opt/hub && nohup venv/bin/python3 app.py > /opt/hub/hub.log 2>&1 &", shell=True)
 print("Done. Backups end with .bak-" + stamp + ". Open the God Remote app and pull down to reload.")

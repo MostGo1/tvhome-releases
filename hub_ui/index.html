@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hub">
+<meta name="theme-color" content="#0B0E14">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-180.png">
+<title>Hub</title>
+<style>
+/* ==========================================================
+   Two screens, not one scroll.
+     home    a quiet index of what you own
+     remote  one device, laid out like a handset
+   The protocol a command travelled over is engineering detail,
+   so it lives in the details sheet, not on the remote.
+   ========================================================== */
+:root{
+  --void:#0B0E14; --surface:rgba(255,255,255,.055); --raised:rgba(255,255,255,.085); --edge:rgba(255,255,255,.11);
+  --text:#E9E7E2; --muted:#79839A; --signal:#FFA23A; --dim:#7A4E17;
+  --fault:#E4574C; --good:#4E9C6B;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --ui:-apple-system,system-ui,"Segoe UI",sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background-color:var(--void);background-image:radial-gradient(120% 70% at 85% -10%,rgba(255,162,58,.13),transparent 60%),radial-gradient(90% 60% at -10% 110%,rgba(78,120,200,.12),transparent 60%);background-attachment:fixed;min-height:100vh;color:var(--text);
+  font-family:var(--ui);-webkit-font-smoothing:antialiased}
+body{padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 96px);font-size:16px}
+button{font-family:inherit}
+
+.micro{font-family:var(--mono);font-size:10px;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--muted)}
+
+/* ---------------- top strip ---------------- */
+.top{display:flex;align-items:center;gap:9px;margin-bottom:22px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--fault);flex:none}
+.dot.live{background:var(--good);box-shadow:0 0 9px rgba(78,156,107,.7)}
+.top .grow{flex:1}
+
+/* ---------------- scenes ---------------- */
+.scenes{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 24px;
+  padding:0 16px 3px;scrollbar-width:none}
+.scenes::-webkit-scrollbar{display:none}
+.scene{flex:none;min-height:42px;padding:0 17px;border-radius:999px;
+  border:1px solid var(--edge);background:var(--surface);color:var(--text);
+  font-size:14.5px;font-weight:500;white-space:nowrap}
+.scene:active{border-color:var(--signal);color:var(--signal)}
+.scene.rec{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted)}
+.scene.live{background:var(--signal);color:#12161E;border-color:var(--signal)}
+
+/* ---------------- device list ---------------- */
+.tile{display:flex;align-items:center;gap:15px;width:100%;text-align:left;
+  background:var(--surface);border:1px solid var(--edge);border-radius:16px;
+  padding:18px 16px;margin-bottom:10px;color:var(--text)}
+.tile:active{border-color:var(--signal)}
+.glyph{width:44px;height:44px;flex:none;border-radius:12px;
+  background:var(--raised);display:flex;align-items:center;justify-content:center;
+  font-size:21px}
+.tile .body{flex:1;min-width:0}
+.tile .title{font-size:17.5px;font-weight:600;letter-spacing:-.01em;
+  margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .sub{font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted)}
+.tile .sub.warn{color:var(--signal)}
+.chev{color:var(--muted);font-size:20px;flex:none}
+
+.add{width:100%;min-height:54px;margin-top:6px;border-radius:14px;
+  border:1px dashed var(--edge);background:none;color:var(--muted);
+  font-size:15.5px}
+.add:active{border-color:var(--signal);color:var(--signal)}
+
+/* ---------------- remote screen ---------------- */
+.head{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+.back{width:40px;height:40px;flex:none;border-radius:11px;
+  border:1px solid var(--edge);background:none;color:var(--text);font-size:19px}
+.back:active{border-color:var(--signal);color:var(--signal)}
+.head .name{flex:1;font-size:21px;font-weight:650;letter-spacing:-.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.more{width:40px;height:40px;flex:none;border-radius:11px;
+  border:1px solid var(--edge);background:none;color:var(--muted);font-size:16px}
+
+.banner{display:flex;align-items:center;gap:12px;
+  background:rgba(255,162,58,.09);border:1px solid var(--signal);
+  border-radius:14px;padding:13px 14px;margin-bottom:18px}
+.banner span{flex:1;font-size:13.5px;line-height:1.45}
+.banner button{flex:none;min-height:38px;padding:0 15px;border:none;
+  border-radius:9px;background:var(--signal);color:#12161E;
+  font-size:13.5px;font-weight:650}
+
+/* power + volume rocker sit together, as they do on a handset */
+.prime{display:flex;gap:12px;margin-bottom:16px}
+.power{flex:1;border-radius:16px;border:1px solid var(--edge);
+  background:var(--surface);color:var(--muted);display:flex;
+  flex-direction:column;align-items:center;justify-content:center;gap:7px;
+  min-height:124px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;
+  font-family:var(--mono)}
+.power .ring{width:44px;height:44px;border-radius:50%;
+  border:2px solid currentColor;display:flex;align-items:center;
+  justify-content:center;font-size:19px}
+.power.on{color:var(--signal);border-color:var(--signal);
+  background:rgba(255,162,58,.07)}
+.power:active{transform:scale(.98)}
+
+.rocker{width:88px;flex:none;border-radius:16px;border:1px solid var(--edge);
+  background:var(--surface);display:flex;flex-direction:column;
+  align-items:stretch;overflow:hidden}
+.rocker button{flex:1;background:none;border:none;color:var(--signal);
+  font-size:25px;line-height:1}
+.rocker button:active{background:rgba(255,162,58,.12)}
+.rocker .val{padding:7px 0;text-align:center;font-family:var(--mono);
+  font-size:17px;font-variant-numeric:tabular-nums;color:var(--text);
+  border-top:1px solid var(--edge);border-bottom:1px solid var(--edge)}
+
+/* ---------------- live screen ---------------- */
+.screen{position:relative;width:100%;aspect-ratio:16/9;border-radius:14px;
+  border:1px solid var(--edge);background:#000;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;margin-bottom:10px}
+.screen img{width:100%;height:100%;object-fit:contain;display:block}
+.screen .msg{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);text-align:center;padding:0 24px;
+  line-height:1.9}
+.screen .live{position:absolute;top:9px;right:10px;font-family:var(--mono);
+  font-size:9px;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--signal);background:rgba(11,14,20,.72);padding:3px 7px;
+  border-radius:5px}
+
+/* ---------------- touch surface ---------------- */
+.surface{position:relative;height:210px;border-radius:18px;
+  border:1px solid var(--edge);
+  background:radial-gradient(circle at 50% 46%,rgba(255,162,58,.06),
+             transparent 62%),var(--raised);
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;
+  margin-bottom:12px}
+.surface .hint{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;
+  text-transform:uppercase;color:#5A6478;text-align:center;line-height:2;
+  pointer-events:none}
+.surface .ripple{position:absolute;width:84px;height:84px;
+  margin:-42px 0 0 -42px;border-radius:50%;background:var(--signal);
+  opacity:0;pointer-events:none;transition:opacity .28s,transform .28s}
+.surface.hit .ripple{opacity:.2;transform:scale(1.2)}
+
+/* ---------------- generic rows ---------------- */
+.sect{margin-bottom:20px}
+.sect .micro{margin-bottom:9px;display:block}
+.row{display:flex;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.btn{flex:1;min-width:0;min-height:52px;border-radius:13px;
+  border:1px solid var(--edge);background:var(--surface);color:var(--text);
+  font-size:15px;font-weight:500;display:flex;align-items:center;
+  justify-content:center;gap:6px;padding:0 8px;transition:transform .07s}
+.btn:active{transform:scale(.96);border-color:var(--signal)}
+.btn.on{border-color:var(--signal);color:var(--signal)}
+.btn.wide{min-height:56px}
+
+.keys{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.keys .btn{font-family:var(--mono);font-size:21px;
+  font-variant-numeric:tabular-nums;min-height:56px}
+.keys .btn.lab{font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+
+.type{display:flex;gap:8px}
+.type input{flex:1;min-width:0;height:52px;background:var(--raised);
+  color:var(--text);border:1px solid var(--edge);border-radius:13px;
+  padding:0 14px;font-size:16px}
+.type input:focus{outline:none;border-color:var(--signal)}
+.type button{flex:none;padding:0 19px;height:52px;border:none;
+  border-radius:13px;background:var(--signal);color:#12161E;
+  font-size:15px;font-weight:650}
+
+/* a fold keeps the screen short without hiding anything */
+.fold{width:100%;min-height:46px;border-radius:12px;border:1px solid var(--edge);
+  background:none;color:var(--muted);font-family:var(--mono);font-size:10px;
+  letter-spacing:.16em;text-transform:uppercase;margin-bottom:10px}
+.fold:active{border-color:var(--signal);color:var(--signal)}
+
+/* only speaks up when something failed */
+.note{min-height:16px;font-family:var(--mono);font-size:10.5px;
+  letter-spacing:.06em;color:var(--muted);margin-top:4px;line-height:1.6}
+.note.bad{color:var(--fault)}
+
+/* ---------------- sheets ---------------- */
+.veil{position:fixed;inset:0;background:rgba(5,7,11,.84);
+  backdrop-filter:blur(16px);display:flex;align-items:flex-end;z-index:30}
+.sheet{width:100%;background:var(--surface);border-top:1px solid var(--edge);
+  border-radius:22px 22px 0 0;padding:22px 16px
+  calc(env(safe-area-inset-bottom) + 20px);max-height:84vh;overflow:auto}
+.sheet h2{font-size:19px;margin:0 0 5px;letter-spacing:-.01em}
+.sheet .micro{display:block;margin-bottom:18px}
+.opt{width:100%;min-height:54px;text-align:left;padding:0 16px;
+  background:var(--raised);border:1px solid var(--edge);border-radius:13px;
+  color:var(--text);font-size:16px;margin-bottom:9px}
+.opt:active{border-color:var(--signal)}
+.opt.danger{color:var(--fault)}
+.found{width:100%;text-align:left;background:var(--raised);
+  border:1px solid var(--edge);border-radius:13px;padding:15px;
+  margin-bottom:9px;color:var(--text)}
+.found:active{border-color:var(--signal)}
+.found .t{font-size:16px;font-weight:600;margin-bottom:5px}
+.found[disabled]{opacity:.4}
+.close{width:100%;min-height:50px;margin-top:5px;background:none;
+  border:1px solid var(--edge);border-radius:13px;color:var(--muted);
+  font-size:15px}
+.rep{margin-bottom:10px;padding:15px;border-radius:13px;
+  background:var(--raised);border-left:3px solid var(--muted)}
+.rep.bad{border-left-color:var(--fault)}
+.rep.warn{border-left-color:var(--signal)}
+.rep.ok{border-left-color:var(--good)}
+.rep h3{margin:0 0 7px;font-size:15.5px;line-height:1.35}
+.rep p{margin:0 0 9px;font-size:14px;line-height:1.55;color:#BFC5D2}
+.rep .do{margin:0;font-size:14px;line-height:1.55;color:var(--text)}
+.rep .do b{display:block;color:var(--signal);font-family:var(--mono);
+  font-size:9.5px;letter-spacing:.16em;margin-bottom:4px;font-weight:500}
+.nums{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;
+  color:var(--muted);line-height:1.9;font-variant-numeric:tabular-nums;
+  border-top:1px solid var(--edge);padding-top:12px}
+
+.empty{text-align:center;color:var(--muted);padding:60px 16px;line-height:1.65}
+.empty b{display:block;color:var(--text);font-size:18px;margin-bottom:7px}
+
+.pair{max-width:420px;margin:15vh auto 0}
+.pair h1{font-size:25px;margin:0 0 7px;letter-spacing:-.02em}
+.pair p{color:var(--muted);margin:0 0 22px;line-height:1.55;font-size:15px}
+.pair input{width:100%;height:52px;background:var(--surface);color:var(--text);
+  border:1px solid var(--edge);border-radius:13px;padding:0 14px;
+  font-family:var(--mono);font-size:14px;margin-bottom:11px}
+.pair button{width:100%;height:52px;border:none;border-radius:13px;
+  background:var(--signal);color:#12161E;font-size:16px;font-weight:650}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.page{animation:rise .22s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.hello{margin:6px 0 20px}.hello h1{margin:4px 0 0;font-size:30px;letter-spacing:-.03em;font-weight:650}
+.lab{display:block;margin:22px 0 10px}
+.card{background:var(--surface);border:1px solid var(--edge);border-radius:18px;
+  -webkit-backdrop-filter:blur(18px);backdrop-filter:blur(18px)}
+.card.pad{padding:14px}
+.sm{margin:12px 0 8px;display:block}
+.scenegrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.scn{min-height:84px;padding:14px;text-align:left;color:var(--text);display:flex;flex-direction:column;
+  justify-content:space-between;gap:6px;font-size:16px}
+.scn b{font-weight:600;letter-spacing:-.01em}
+.scn:active{border-color:var(--signal)}
+.scn.rec{color:var(--muted);border-style:dashed}.scn.hot{background:var(--signal);color:#12161E;border-style:solid}
+.qrow{display:flex;align-items:center;gap:8px;padding:10px 10px 10px 14px;margin-bottom:10px}
+.qname{flex:1;min-width:0;background:none;border:none;color:var(--text);text-align:left;padding:0;font-size:16px}
+.qname b{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px}
+.mini{width:46px;height:46px;border-radius:13px;border:1px solid var(--edge);background:var(--raised);
+  color:var(--text);font-size:20px}
+.mini:active{border-color:var(--signal)}
+.mini.pw{color:var(--muted)}.mini.pw.on{color:var(--signal);border-color:var(--signal);background:rgba(255,162,58,.1)}
+.chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px 16px;padding:0 16px;scrollbar-width:none}
+.chip{flex:none;min-height:38px;padding:0 16px;border-radius:999px;border:1px solid var(--edge);
+  background:var(--surface);color:var(--muted);font-size:14.5px}
+.chip.on{background:var(--signal);color:#12161E;border-color:var(--signal);font-weight:600}
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:0;min-height:44px;padding:0 10px;border-radius:12px;border:1px solid var(--edge);
+  background:var(--raised);color:var(--text);font-size:14.5px;white-space:nowrap}
+.seg button.on{background:var(--signal);color:#12161E;border-color:var(--signal);font-weight:600}
+.filebtn{cursor:pointer}
+.tilerow{display:flex;align-items:center;margin-bottom:10px;padding-right:10px}
+.tilerow .tile{border:none;background:none;margin:0;padding:14px 12px 14px 14px;flex:1;min-width:0}
+.tilerow .more{margin-left:4px}
+.head{margin-bottom:18px}
+.tabs{position:fixed;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 10px);z-index:20;
+  display:flex;gap:4px;padding:6px;border-radius:24px;background:rgba(20,25,34,.72);
+  border:1px solid var(--edge);-webkit-backdrop-filter:blur(22px) saturate(1.4);backdrop-filter:blur(22px) saturate(1.4)}
+.tab{flex:1;min-height:52px;border:none;border-radius:18px;background:none;color:var(--muted);
+  font-size:11px;letter-spacing:.04em;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px}
+.tab i{font-style:normal;font-size:19px;line-height:1}
+.tab.on{background:rgba(255,162,58,.14);color:var(--signal)}
+.sheet{background:#161b26}
+#tvnote{background:rgba(8,10,16,.97)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+/* ================================================================ state */
+const KEY = "hub.token", HOSTS_KEY = "hub.hosts";
+let token = "";
+try { token = localStorage.getItem(KEY) || ""; } catch (e) {}
+
+let devices = [];
+let scenesList = [];
+let recording = { active: false, captured: 0 };
+let view = { tab: "home", id: null };
+let folds = {};
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const dev = id => devices.find(d => d.id === id);
+
+const GLYPH = { tv: "▣", ir: "◈", device: "◉" };
+
+/* ================================================================ api */
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { "X-Hub-Token": token, "Content-Type": "application/json",
+               ...(options.headers || {}) }
+  });
+  if (res.status === 401) {
+    token = "";
+    try { localStorage.removeItem(KEY); } catch (e) {}
+    pairing();
+    throw new Error("unauthorized");
+  }
+  if (!res.ok) throw new Error(
+    (await res.json().catch(() => ({}))).error || "hub error " + res.status);
+  return res.json();
+}
+
+/* ================================================================ pairing */
+function pairing(message) {
+  root.innerHTML = `<div class="pair"><h1>Pair this phone</h1>
+    <p>${esc(message || "Paste the hub token. It stays on this phone and is never sent anywhere but your own server.")}</p>
+    <input id="tk" placeholder="token" autocapitalize="off" autocorrect="off"
+           spellcheck="false">
+    <button id="go">Connect</button></div>`;
+  document.getElementById("go").onclick = async () => {
+    token = document.getElementById("tk").value.trim();
+    if (!token) return;
+    try {
+      await api("/api/devices");
+      try { localStorage.setItem(KEY, token); } catch (e) {}
+      load();
+    } catch (e) { pairing("That token was rejected. Check it and try again."); }
+  };
+}
+
+function remoteBody(id) {
+  const d = dev(id);
+  if (!d) return "";
+  const caps = d.capabilities || [];
+  const state = d.state || {};
+  const apps = appsOf(d);
+  let html = "";
+
+  if (needsPairing(d))
+    html += `<div class="banner"><span>The remote is not paired, so arrows,
+      OK and power stay locked.</span>
+      <button data-pair="${id}">Pair</button></div>`;
+
+  /* power and volume, side by side */
+  const hasPower = caps.includes("power");
+  const hasVol = caps.includes("volume");
+  if (hasPower || hasVol) {
+    html += `<div class="prime">`;
+    if (hasPower)
+      html += `<button class="power${state.power ? " on" : ""}"
+        data-dev="${id}" data-cap="power"
+        data-val="${esc(JSON.stringify(!state.power))}">
+        <span class="ring">⏻</span>${state.power ? "on" : "power"}</button>`;
+    if (hasVol)
+      html += `<div class="rocker">
+        <button data-vol="up" data-dev="${id}">+</button>
+        <div class="val" id="o-${id}-volume">${
+          state.volume ?? (state.volume_relative ? "vol" : "–")}</div>
+        <button data-vol="down" data-dev="${id}">−</button>
+      </div>`;
+    html += `</div>`;
+  }
+
+  if (caps.includes("mute"))
+    html += `<div class="sect"><div class="row">
+      ${button(id, "mute", !state.mute, state.mute ? "Unmute" : "Mute",
+               state.mute)}
+
+    </div></div>`;
+
+  if (caps.includes("screen")) {
+    html += fold(id, "screen", "see the screen");
+    if (folds[id + "screen"])
+      html += `<div class="screen" id="s-${id}">
+          <div class="msg">tap refresh to look</div></div>
+        <div class="sect"><div class="row">
+          <button class="btn" data-shot="${id}">Refresh</button>
+          <button class="btn" data-watch="${id}">Keep watching</button>
+        </div>
+        <div class="row" style="margin-top:8px">
+          ${[["1", "fast"], ["2", "even"], ["4", "light"]].map(([s, label]) =>
+            `<button class="btn${screenTarget == s ? " on" : ""}"
+               data-speed="${s}">${s}s · ${label}</button>`).join("")}
+        </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn${overlaysOff ? " on" : ""}" data-overlay="${id}">
+            ${overlaysOff ? "Video included" : "Include the video"}</button>
+        </div>
+        <div class="note" id="fps-${id}"></div></div>`;
+  }
+
+  if (caps.includes("navigation")) {
+    html += `<div class="surface" data-surface="${id}"><div class="ripple"></div>
+      <div class="hint">swipe · move<br>tap · select</div></div>`;
+    html += `<div class="sect"><div class="row">
+      ${button(id, "navigation", "back", "Back")}
+      ${button(id, "navigation", "home", "Home")}
+      ${button(id, "navigation", "menu", "Menu")}</div></div>`;
+  }
+
+  if (caps.includes("media"))
+    html += section("playback", `<div class="row">
+      ${["prev,‹‹", "play,▶", "pause,❚❚", "next,››"].map(pair => {
+        const [v, g] = pair.split(",");
+        return button(id, "media", v, g);
+      }).join("")}</div>`);
+
+  if (caps.includes("input_source") && apps.length)
+    html += section("open", `<div class="grid2">
+      ${apps.map(a => button(id, "input_source", a, a)).join("")}</div>`);
+
+  if (caps.includes("temperature"))
+    html += section("temperature", `<div class="prime">
+      <div class="rocker" style="width:100%;flex-direction:row">
+        <button data-step="-1" data-dev="${id}" data-cap="temperature">−</button>
+        <div class="val" id="o-${id}-temperature"
+             style="flex:1;border:none">${state.temperature ?? 24}°</div>
+        <button data-step="1" data-dev="${id}" data-cap="temperature">+</button>
+      </div></div>`);
+
+  for (const [cap, label, options] of [
+      ["fan_speed", "fan", ["Auto", "Low", "Medium", "High"]],
+      ["mode", "mode", ["Cool", "Heat", "Dry", "Fan"]]])
+    if (caps.includes(cap))
+      html += section(label, `<div class="grid2">${options.map(o =>
+        button(id, cap, o, o, state[cap] === o)).join("")}</div>`);
+
+  /* folded away until wanted - this is what stopped the screen sprawling */
+  if (caps.includes("numpad")) {
+    html += fold(id, "keypad", "number keypad");
+    if (folds[id + "keypad"])
+      html += `<div class="sect"><div class="keys">
+        ${[1,2,3,4,5,6,7,8,9].map(n =>
+            button(id, "numpad", String(n), String(n))).join("")}
+        ${button(id, "numpad", "backspace", "del", false, "lab")}
+        ${button(id, "numpad", "0", "0")}
+        ${button(id, "numpad", "enter", "ok", false, "lab")}
+      </div></div>`;
+  }
+
+  if (caps.includes("text")) {
+    html += fold(id, "text", "type on the screen");
+    if (folds[id + "text"])
+      html += `<div class="sect"><div class="type">
+        <input id="x-${id}" placeholder="password, search, anything"
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button data-send="${id}">Send</button></div>
+        <div class="micro" style="margin-top:9px">tap the microphone on the
+        keyboard to dictate</div></div>`;
+  }
+
+  if (caps.includes("power")) {
+    const left = d.sleep_remaining;
+    html += fold(id, "sleep", left != null
+      ? `sleep timer · ${Math.ceil(left / 60)} min left`
+      : "sleep timer");
+    if (folds[id + "sleep"])
+      html += `<div class="sect"><div class="row">
+        ${[15, 30, 60, 90].map(m =>
+          `<button class="btn" data-sleep="${id}" data-min="${m}">${m}</button>`
+        ).join("")}</div>
+        <div class="row" style="margin-top:8px">
+        <button class="btn" data-sleep="${id}" data-min="0">Cancel</button>
+        </div>
+        <div class="note" id="sl-${id}">${left != null
+          ? `switches off in ${Math.ceil(left / 60)} minutes`
+          : "counts down on the server, even with the phone off"}</div>
+      </div>`;
+  }
+
+  html += `<div class="note" id="t-${id}"></div>`;
+  return html;
+}
+
+const section = (label, inner) =>
+  `<div class="sect"><span class="micro">${label}</span>${inner}</div>`;
+
+const fold = (id, key, label) =>
+  `<button class="fold" data-fold="${id + key}">${
+    folds[id + key] ? "− " : "+ "}${label}</button>`;
+
+const button = (id, cap, value, label, on, extra) =>
+  `<button class="btn${on ? " on" : ""}${extra ? " " + extra : ""}"
+     data-dev="${id}" data-cap="${cap}"
+     data-val="${esc(JSON.stringify(value))}">${esc(label)}</button>`;
+
+function appsOf(d) {
+  // What the user chose for this device wins. Before they choose, fall back
+  // to whatever the device advertised, trimmed to four.
+  if ((d.apps || []).length) return d.apps.map(a => a.name).slice(0, 4);
+  for (const c of d.channels || [])
+    if (c.config && c.config.apps) return c.config.apps.slice(0, 4);
+  return [];
+}
+function needsPairing(d) {
+  return (d.channels || []).some(
+    c => c.driver === "androidtv_remote" && c.config && !c.config.paired);
+}
+
+/* ================================================================ tabs */
+const TABS = [["home", "Home", "⌂"], ["remote", "Remote", "◎"], ["tv", "TV Home", "▣"], ["devices", "Devices", "☰"]];
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 5 ? "Good night" : h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+
+function homeTab() {
+  const rec = recording.active;
+  let html = `<div class="hello"><div class="micro">${new Date().toLocaleDateString(undefined,
+      { weekday: "long", day: "numeric", month: "long" })}</div><h1>${greeting()}</h1></div>`;
+
+  html += `<span class="micro lab">Scenes</span><div class="scenegrid">
+    ${scenesList.map(s => `<button class="card scn" data-run="${s.id}">
+       <b>${esc(s.name)}</b>${s.schedule ? `<span class="micro">${esc(s.schedule)}</span>` : ""}</button>`).join("")}
+    <button class="card scn rec${rec ? " hot" : ""}" id="rec"><b>${
+      rec ? `Save ${recording.captured} steps` : "＋ Record a scene"}</b></button>
+    ${rec ? `<button class="card scn rec" id="reccancel"><b>Cancel</b></button>` : ""}
+  </div>`;
+
+  const quick = devices.filter(d => (d.capabilities || []).some(c => c === "power" || c === "volume"));
+  if (quick.length) {
+    html += `<span class="micro lab">Quick</span>`;
+    for (const d of quick) {
+      const caps = d.capabilities || [], st = d.state || {};
+      html += `<div class="card qrow"><button class="qname" data-pick="${d.id}">
+          <b>${esc(d.name)}</b><span class="micro">${d.online ? "online" : "offline"}</span></button>
+        ${caps.includes("volume") ? `<button class="mini" data-vol="down" data-dev="${d.id}">−</button>
+        <button class="mini" data-vol="up" data-dev="${d.id}">+</button>` : ""}
+        ${caps.includes("power") ? `<button class="mini pw${st.power ? " on" : ""}" data-dev="${d.id}"
+          data-cap="power" data-val="${esc(JSON.stringify(!st.power))}">⏻</button>` : ""}</div>`;
+    }
+  }
+
+  html += `<span class="micro lab">TV Home</span><div class="scenegrid">
+    <button class="card scn" id="h-next"><b>Next picture</b><span class="micro">wallpaper</span></button>
+    <button class="card scn" id="h-note"><b>Note to TV</b><span class="micro">draw or type</span></button></div>
+    <div class="note" id="h-st"></div>`;
+  return html;
+}
+
+function remoteTab() {
+  if (!view.id || !dev(view.id)) return `<div class="empty"><b>No device yet</b>Add one in the Devices tab.</div>`;
+  const d = dev(view.id);
+  let html = "";
+  if (devices.length > 1)
+    html += `<div class="chips">${devices.map(o => `<button class="chip${o.id === view.id ? " on" : ""}"
+      data-pick="${o.id}">${esc(o.name)}</button>`).join("")}</div>`;
+  html += `<div class="head"><span class="name">${esc(d.name)}</span>
+    <button class="more" id="more">•••</button></div>`;
+  return html + remoteBody(view.id);
+}
+
+let tvStatus = null;
+function tvTab() {
+  const s = tvStatus;
+  const seg = (items, cur, attr) => `<div class="seg">${items.map(([v, l]) =>
+    `<button class="${String(cur) === String(v) ? "on" : ""}" data-${attr}="${v}">${l}</button>`).join("")}</div>`;
+  let html = `<div class="hello"><div class="micro">Living room</div><h1>TV Home</h1></div>
+    <div class="note${s === false ? " bad" : ""}" id="tv-st">${
+      s === null ? "Looking for the TV…" : s === false ? "The TV launcher did not answer. Is the TV on?" : ""}</div>`;
+
+  html += `<span class="micro lab">Note</span><div class="card pad">
+      <div class="row"><button class="btn wide" id="t-note">Write or draw a note</button>
+      <button class="btn wide" id="t-clearnote">Remove</button></div>
+      <div class="micro sm">${s && s.note ? "A note is showing on the TV (24 hours)" : "Shows as a card on the TV for 24 hours"}</div></div>`;
+
+  html += `<span class="micro lab">Wallpaper</span><div class="card pad">
+      <button class="btn wide" id="t-next" style="width:100%">Next picture</button>
+      <div class="micro sm">Source</div>
+      ${seg([["paintings", "Paintings"], ["folder", "Home folder"], ["phone", "My photos"]], s ? s.source : "", "src")}
+      ${s && s.source === "folder" ? `<div class="micro sm">${s.folder ? "Folder: " + esc(s.folder) : "Pick the folder once on the TV (Settings → Appearance)"}</div>` : ""}
+      <div class="micro sm">Change the picture</div>
+      ${seg([[0, "Never"], [2, "2m"], [15, "15m"], [30, "30m"], [60, "1h"], [120, "2h"], [180, "3h"]], s ? s.every : "", "every")}
+    </div>`;
+
+  html += `<span class="micro lab">Photos from this phone</span><div class="card pad">
+      <div class="row"><label class="btn wide filebtn">Add photos
+        <input type="file" accept="image/*" multiple id="t-files" hidden></label>
+        <button class="btn wide" id="t-clearphotos">Remove all</button></div>
+      <div class="micro sm" id="t-count">${s ? s.phone + " photo(s) on the TV" : ""}</div>
+      <div class="micro sm">Photos go from this phone to your own hub, then straight to the TV. They never leave the house network.</div></div>`;
+  return html;
+}
+
+function devicesTab() {
+  let html = `<div class="hello"><div class="micro">${devices.length} device${devices.length === 1 ? "" : "s"}</div><h1>Devices</h1></div>`;
+  html += devices.length ? devices.map(d => {
+    const unpaired = needsPairing(d);
+    return `<div class="card tilerow"><button class="tile" data-open="${d.id}">
+      <span class="glyph">${GLYPH[d.icon] || GLYPH.device}</span><span class="body">
+        <span class="title">${esc(d.name)}</span>
+        <span class="sub${unpaired ? " warn" : ""}">${unpaired ? "remote not paired"
+          : d.online ? (d.capabilities || []).length + " controls" : "offline"}</span></span></button>
+      <button class="more" data-details="${d.id}">•••</button></div>`;
+  }).join("") : `<div class="empty"><b>Nothing paired yet</b>Scan the network and pick what you want to control.</div>`;
+  html += `<button class="add" id="scan">＋ Add a device</button>
+    <span class="micro lab">Shortcuts</span>
+    <button class="opt" id="d-siri">Siri and home screen buttons</button>
+    <button class="opt" id="d-audit">Hub address and token</button>`;
+  return html;
+}
+
+/* ================================================================ render */
+const root = document.getElementById("root");
+function render() {
+  if (!view.id || !dev(view.id)) {
+    let saved = ""; try { saved = localStorage.getItem("hub.dev") || ""; } catch (e) {}
+    view.id = dev(saved) ? saved : (devices[0] || {}).id || null;
+  }
+  const page = view.tab === "remote" ? remoteTab() : view.tab === "tv" ? tvTab()
+             : view.tab === "devices" ? devicesTab() : homeTab();
+  root.innerHTML = `<main class="page">${page}</main><nav class="tabs">${TABS.map(([k, l, g]) =>
+    `<button class="tab${view.tab === k ? " on" : ""}" data-tab="${k}"><i>${g}</i>${l}</button>`).join("")}</nav>`;
+  wireTabs();
+  wireCommon();
+  if (view.tab === "home") wireHome();
+  if (view.tab === "remote") wireRemote(view.id);
+  if (view.tab === "tv") wireTv();
+  if (view.tab === "devices") wireDevices();
+}
+
+function go(tab) {
+  stopWatching();
+  view.tab = tab;
+  render();
+  window.scrollTo(0, 0);
+  if (tab === "tv") loadTv();
+  if (tab === "remote" && view.id) refresh(view.id);
+}
+
+function setDevice(id) {
+  view.id = id;
+  try { localStorage.setItem("hub.dev", id); } catch (e) {}
+}
+
+function wireTabs() {
+  document.querySelectorAll("[data-tab]").forEach(el => el.onclick = () => go(el.dataset.tab));
+  document.querySelectorAll("[data-pick]").forEach(el => el.onclick = () => {
+    stopWatching(); setDevice(el.dataset.pick); go("remote");
+  });
+}
+
+/* ================================================================ TV Home (the launcher on the television, reached through the hub) */
+async function tv(sub, options = {}) {
+  const res = await fetch("/api/tv/" + sub, { ...options,
+    headers: { "X-Hub-Token": token, ...(options.headers || {}) } });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.ok === false) throw new Error(body.error || "TV did not answer");
+  return body;
+}
+const tvCmd = (a, v) => tv("cmd", { method: "POST", body: JSON.stringify({ a, v: String(v ?? "") }) });
+
+async function loadTv() {
+  tvStatus = null;
+  try { tvStatus = await tv("status"); } catch (e) { tvStatus = false; }
+  if (view.tab === "tv") { render(); }
+}
+
+function say(id, text, bad) {
+  const n = document.getElementById(id);
+  if (n) { n.className = "note" + (bad ? " bad" : ""); n.textContent = text; }
+}
+
+function resizePhoto(file) {
+  return new Promise((res, rej) => {
+    const u = URL.createObjectURL(file), im = new Image();
+    im.onload = () => {
+      const m = 1800, k = Math.min(1, m / Math.max(im.width, im.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(im.width * k); c.height = Math.round(im.height * k);
+      c.getContext("2d").drawImage(im, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(u);
+      c.toBlob(b => b ? res(b) : rej(new Error("photo")), "image/jpeg", 0.86);
+    };
+    im.onerror = () => rej(new Error("Could not read the photo"));
+    im.src = u;
+  });
+}
+
+function wireTv() {
+  const act = (id, fn, okText) => {
+    const el = document.getElementById(id);
+    if (el) el.onclick = async () => {
+      try { await fn(); if (okText) say("tv-st", okText); } catch (e) { say("tv-st", e.message, true); }
+    };
+  };
+  act("t-note", async () => openNote());
+  act("t-clearnote", async () => { await tvCmd("clearnote"); loadTv(); }, "Note removed");
+  act("t-next", async () => { await tvCmd("next"); }, "A new picture is loading on the TV");
+  act("t-clearphotos", async () => {
+    if (!confirm("Remove all photos you sent to the TV?")) return;
+    await tvCmd("clearphotos"); loadTv();
+  }, "Photos removed");
+  document.querySelectorAll("[data-src]").forEach(el => el.onclick = async () => {
+    try { await tvCmd("source", el.dataset.src); loadTv(); } catch (e) { say("tv-st", e.message, true); }
+  });
+  document.querySelectorAll("[data-every]").forEach(el => el.onclick = async () => {
+    try { await tvCmd("every", el.dataset.every); loadTv(); } catch (e) { say("tv-st", e.message, true); }
+  });
+  const files = document.getElementById("t-files");
+  if (files) files.onchange = async () => {
+    const list = [...files.files]; let ok = 0;
+    for (let i = 0; i < list.length; i++) {
+      say("t-count", `Sending ${i + 1} of ${list.length}…`);
+      try {
+        const blob = await resizePhoto(list[i]);
+        await tv("photo", { method: "POST", body: blob, headers: { "Content-Type": "image/jpeg" } });
+        ok++;
+      } catch (e) {}
+    }
+    say("t-count", `${ok} of ${list.length} sent`);
+    if (ok) { try { await tvCmd("source", "phone"); } catch (e) {} }
+    files.value = "";
+    loadTv();
+  };
+}
+
+function wireHome() {
+  document.querySelectorAll("[data-run]").forEach(el => {
+    el.onclick = async () => {
+      const label = el.innerHTML;
+      el.innerHTML = "<b>Running…</b>";
+      try {
+        const r = await api(`/api/scenes/${el.dataset.run}/run`, { method: "POST" });
+        el.innerHTML = (r.failed || []).length ? `<b>${r.ran}/${r.total} done</b>` : "<b>Done</b>";
+      } catch (e) { alert(e.message); }
+      setTimeout(() => { el.innerHTML = label; }, 1400);
+    };
+  });
+  const rec = document.getElementById("rec");
+  if (rec) rec.onclick = async () => {
+    try {
+      if (!recording.active) {
+        await api("/api/scenes/record", { method: "POST", body: JSON.stringify({ action: "start" }) });
+        recording = { active: true, captured: 0 };
+        render();
+        alert("Recording. Use the remote as normal, then come back and press Save.");
+      } else {
+        const name = prompt("Name this scene", "Film night");
+        if (!name) return;
+        const r = await api("/api/scenes/record", { method: "POST", body: JSON.stringify({ name: name.trim() }) });
+        scenesList = r.scenes || [];
+        recording = { active: false, captured: 0 };
+        render();
+      }
+    } catch (e) { alert(e.message); }
+  };
+  const cancel = document.getElementById("reccancel");
+  if (cancel) cancel.onclick = async () => {
+    await api("/api/scenes/record", { method: "POST", body: JSON.stringify({ action: "cancel" }) });
+    recording = { active: false, captured: 0 }; render();
+  };
+  const n = document.getElementById("h-next");
+  if (n) n.onclick = async () => {
+    try { await tvCmd("next"); say("h-st", "A new picture is loading on the TV"); }
+    catch (e) { say("h-st", e.message, true); }
+  };
+  const nt = document.getElementById("h-note");
+  if (nt) nt.onclick = () => openNote();
+}
+
+function wireDevices() {
+  document.querySelectorAll("[data-open]").forEach(el => el.onclick = () => {
+    setDevice(el.dataset.open); go("remote");
+  });
+  document.querySelectorAll("[data-details]").forEach(el => el.onclick = () => details(el.dataset.details));
+  const scan = document.getElementById("scan");
+  if (scan) scan.onclick = discover;
+  const siri = document.getElementById("d-siri");
+  if (siri) siri.onclick = siriHelp;
+  const au = document.getElementById("d-audit");
+  if (au) au.onclick = () => sheet(`<h2>Hub</h2><span class="micro">where this app lives</span>
+    <div class="nums">${esc(location.host)}<br>token stays on this phone</div>`);
+}
+
+function wireRemote(id) {
+  const more = document.getElementById("more");
+  if (more) more.onclick = () => details(id);
+  document.querySelectorAll("[data-surface]").forEach(pad => {
+    let sx = 0, sy = 0;
+    const flash = (x, y) => {
+      const r = pad.querySelector(".ripple"), box = pad.getBoundingClientRect();
+      r.style.left = (x - box.left) + "px"; r.style.top = (y - box.top) + "px";
+      pad.classList.add("hit"); setTimeout(() => pad.classList.remove("hit"), 200);
+    };
+    pad.addEventListener("touchstart", ev => {
+      const t = ev.touches[0]; sx = t.clientX; sy = t.clientY;
+    }, { passive: true });
+    pad.addEventListener("touchend", ev => {
+      const t = ev.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
+      flash(t.clientX, t.clientY);
+      if (Math.hypot(dx, dy) < 26) return send(pad.dataset.surface, "navigation", "ok");
+      send(pad.dataset.surface, "navigation",
+        Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "down" : "up"));
+    }, { passive: true });
+  });
+}
+
+/* ================================================================ commands */
+async function send(id, capability, value) {
+  const note = document.getElementById("t-" + id);
+  if (note) { note.className = "note"; note.textContent = ""; }
+  try {
+    const result = await api(`/api/devices/${id}/command`,
+      { method: "POST", body: JSON.stringify({ capability, value }) });
+    const d = dev(id);
+    if (d) d.state = result.state || d.state;
+    // Typing is the one command worth confirming out loud, because a text
+    // field that stays empty gives you nothing to go on.
+    if (capability === "text" && note) {
+      note.textContent = `sent via ${result.state?.typed_via || result.via}`;
+    }
+    paint(id);
+    if (view.tab === "home" && capability === "power") render();
+    refresh(id);
+  } catch (e) {
+    if (note) { note.className = "note bad"; note.textContent = e.message; }
+  }
+}
+
+async function refresh(id) {
+  try {
+    const { state } = await api(`/api/devices/${id}/state`);
+    const d = dev(id);
+    if (!d || !state) return;
+    d.state = { ...d.state, ...state };
+    for (const cap of ["volume", "temperature", "brightness"]) {
+      const out = document.getElementById(`o-${id}-${cap}`);
+      if (out && state[cap] != null)
+        out.textContent = state[cap] + (cap === "temperature" ? "°" : "");
+    }
+    paint(id);
+  } catch (e) {}
+}
+
+function paint(id) {
+  const d = dev(id);
+  if (!d || view.id !== id) return;
+  const s = d.state || {};
+  document.querySelectorAll(`.btn[data-cap="mute"]`).forEach(el => {
+    el.textContent = s.mute ? "Unmute" : "Mute";
+    el.dataset.val = JSON.stringify(!s.mute);
+  });
+  const power = document.querySelector(`.power[data-cap="power"]`);
+  if (power) {
+    power.classList.toggle("on", !!s.power);
+    power.dataset.val = JSON.stringify(!s.power);
+    power.lastChild.textContent = s.power ? "on" : "power";
+  }
+  ["fan_speed", "mode"].forEach(cap => {
+    document.querySelectorAll(`.btn[data-cap="${cap}"]`).forEach(el => {
+      el.classList.toggle("on", s[cap] === JSON.parse(el.dataset.val));
+    });
+  });
+}
+
+/* ================================================================ wiring */
+/* Holding a button repeats it, and speeds up the longer you hold - the same
+   feel as a physical remote. Each press is still one single step. */
+function repeatable(el, fire) {
+  let timer = null, delay = 300;
+  const stop = () => { clearTimeout(timer); timer = null; delay = 300; };
+  const again = () => {
+    fire();
+    delay = Math.max(70, delay * 0.72);
+    timer = setTimeout(again, delay);
+  };
+  el.addEventListener("touchstart", () => {
+    timer = setTimeout(again, 420);
+  }, { passive: true });
+  ["touchend", "touchcancel", "touchmove"].forEach(
+    ev => el.addEventListener(ev, stop, { passive: true }));
+}
+
+function wireCommon() {
+  document.querySelectorAll("[data-cap][data-val]").forEach(el => {
+    const fire = () => send(el.dataset.dev, el.dataset.cap,
+                            JSON.parse(el.dataset.val));
+    el.onclick = fire;
+    if (el.dataset.cap === "navigation") repeatable(el, fire);
+  });
+
+  document.querySelectorAll("[data-sleep]").forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.sleep;
+      const note = document.getElementById("sl-" + id);
+      try {
+        const r = await api(`/api/devices/${id}/sleep`, { method: "POST",
+          body: JSON.stringify({ minutes: Number(el.dataset.min) }) });
+        const d = dev(id);
+        if (d) d.sleep_remaining = r.remaining;
+        if (note) note.textContent = r.remaining
+          ? `switches off in ${Math.ceil(r.remaining / 60)} minutes`
+          : "timer cancelled";
+      } catch (e) { if (note) { note.className = "note bad";
+                                note.textContent = e.message; } }
+    };
+  });
+
+  document.querySelectorAll("[data-shot]").forEach(el => {
+    el.onclick = () => grabScreen(el.dataset.shot);
+  });
+  document.querySelectorAll("[data-watch]").forEach(el => {
+    el.onclick = () => {
+      if (watching) {
+        stopWatching();
+        const badge = document.querySelector(`#s-${el.dataset.watch} .live`);
+        if (badge) badge.remove();
+      } else {
+        el.textContent = "Stop";
+        watching = setTimeout(() => watchLoop(el.dataset.watch), 0);
+      }
+    };
+  });
+
+  document.querySelectorAll("[data-overlay]").forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.overlay;
+      const turningOff = !overlaysOff;
+      if (turningOff && !confirm(
+          "Video is drawn on a separate hardware layer that screen captures "
+          + "cannot see, which is why it comes out black.\n\n"
+          + "This turns that layer off so the picture appears. Playback may "
+          + "become less smooth while it is off.\n\nCarry on?")) return;
+      try {
+        await api(`/api/devices/${id}/overlays`, { method: "POST",
+          body: JSON.stringify({ enabled: !turningOff }) });
+        overlaysOff = turningOff;
+        el.classList.toggle("on", overlaysOff);
+        el.textContent = overlaysOff ? "Video included" : "Include the video";
+        grabScreen(id);
+      } catch (e) { alert(e.message); }
+    };
+  });
+
+  document.querySelectorAll("[data-speed]").forEach(el => {
+    el.onclick = () => {
+      screenTarget = el.dataset.speed;
+      document.querySelectorAll("[data-speed]").forEach(
+        other => other.classList.toggle("on", other === el));
+    };
+  });
+
+  document.querySelectorAll("[data-vol]").forEach(el => {
+    const fire = () => send(el.dataset.dev, "volume", el.dataset.vol);
+    el.onclick = fire;
+    repeatable(el, fire);
+  });
+
+  document.querySelectorAll("[data-step]").forEach(el => {
+    const id = el.dataset.dev, cap = el.dataset.cap;
+    const fire = () => {
+      const out = document.getElementById(`o-${id}-${cap}`);
+      const now = parseInt(out.textContent, 10);
+
+      // Some boxes have no volume of their own - they forward the key press
+      // to the television. For those, a step is the only honest command.
+      if (cap === "volume" && Number.isNaN(now))
+        return send(id, "volume", Number(el.dataset.step) > 0 ? "up" : "down");
+
+      const base = Number.isNaN(now) ? (cap === "temperature" ? 24 : 20) : now;
+      const limit = cap === "temperature" ? [16, 30] : [0, 100];
+      const next = Math.max(limit[0],
+        Math.min(limit[1], base + Number(el.dataset.step)));
+      out.textContent = next + (cap === "temperature" ? "°" : "");
+      send(id, cap, next);
+    };
+    el.onclick = fire;
+    repeatable(el, fire);
+  });
+
+  document.querySelectorAll("[data-fold]").forEach(el => {
+    el.onclick = () => {
+      folds[el.dataset.fold] = !folds[el.dataset.fold];
+      render();
+    };
+  });
+
+  document.querySelectorAll("[data-send]").forEach(el => {
+    const id = el.dataset.send;
+    const field = document.getElementById("x-" + id);
+    const submit = () => {
+      if (!field.value) return;
+      send(id, "text", field.value);
+      field.value = "";
+      field.blur();
+    };
+    el.onclick = submit;
+    field.onkeydown = ev => { if (ev.key === "Enter") submit(); };
+  });
+
+  document.querySelectorAll("[data-pair]").forEach(el => {
+    el.onclick = () => pair(el.dataset.pair);
+  });
+}
+
+/* ================================================================ screen
+   A still frame rather than a video stream. Video would need a continuous
+   encode on a television that has no interest in providing one, while a
+   frame every few seconds is enough to see where the cursor is and drive
+   the menus from another country.
+------------------------------------------------------------------------ */
+let watching = null;          // timeout handle, not an interval
+let overlaysOff = false;      // are hardware overlays currently disabled
+let screenTarget = "2";       // seconds the user asked for
+
+/* Frames are chained rather than fired on a timer. A screen capture on an
+   old server takes as long as it takes; an interval would simply stack
+   requests on top of each other until everything jammed. So the next frame
+   is requested only once the previous one has landed, and the gap shrinks
+   to whatever the hardware can actually sustain. */
+async function grabScreen(id, quiet) {
+  const box = document.getElementById("s-" + id);
+  if (!box) return 0;
+  if (!quiet) box.innerHTML = `<div class="msg">looking…</div>`;
+  const began = performance.now();
+  const fast = screenTarget === "1";
+  const width = fast ? 480 : 640;
+  const quality = fast ? 55 : 72;
+  try {
+    const res = await fetch(
+      `/api/devices/${id}/screen?w=${width}&q=${quality}` +
+      `&fast=${fast ? 1 : 0}&t=${Date.now()}`,
+      { headers: { "X-Hub-Token": token } });
+    if (!res.ok) {
+      const detail = await res.json().catch(() => ({}));
+      throw new Error(detail.error || "capture failed");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const previous = box.querySelector("img");
+    box.innerHTML = `<img alt="television screen">${
+      watching ? `<span class="live">live</span>` : ""}`;
+    box.querySelector("img").src = url;
+    if (previous) URL.revokeObjectURL(previous.src);
+
+    const round = Math.round(performance.now() - began);
+    const onDevice = res.headers.get("X-Capture-Ms");
+    const mode = res.headers.get("X-Capture-Mode");
+    const meter = document.getElementById("fps-" + id);
+    if (meter && watching)
+      meter.textContent =
+        `${(round / 1000).toFixed(1)}s per frame` +
+        (onDevice ? ` · ${onDevice}ms capturing` : "") +
+        (mode ? ` · ${mode}` : "");
+    return round;
+  } catch (e) {
+    box.innerHTML = `<div class="msg">${esc(e.message)}</div>`;
+    stopWatching();
+    return 0;
+  }
+}
+
+function stopWatching() {
+  if (watching) { clearTimeout(watching); watching = null; }
+  document.querySelectorAll("[data-watch]").forEach(
+    el => { el.textContent = "Keep watching"; });
+  // Leaving overlays disabled would quietly cost the television performance
+  // for the rest of the evening, so it is always put back.
+  if (overlaysOff && view.id) {
+    api(`/api/devices/${view.id}/overlays`,
+      { method: "POST", body: JSON.stringify({ enabled: true }) })
+      .catch(() => {});
+    overlaysOff = false;
+  }
+}
+
+async function watchLoop(id) {
+  const round = await grabScreen(id, true);
+  if (!watching && round === 0) return;
+  const target = Number(screenTarget) * 1000;
+  // Never ask for another frame before the last one finished, and never
+  // hammer harder than the target the user picked.
+  const wait = Math.max(target - round, 120);
+  watching = setTimeout(() => watchLoop(id), wait);
+}
+
+/* ================================================================ sheets */
+function sheet(html) {
+  const veil = document.createElement("div");
+  veil.className = "veil";
+  veil.innerHTML = `<div class="sheet">${html}
+    <button class="close">Close</button></div>`;
+  document.body.appendChild(veil);
+  veil.querySelector(".close").onclick = () => veil.remove();
+  return veil;
+}
+
+function details(id) {
+  const d = dev(id);
+  const paired = !needsPairing(d);
+  const veil = sheet(`<h2>${esc(d.name)}</h2>
+    <span class="micro">${esc(d.ip || "")} · ${(d.channels || []).length} channels</span>
+    <button class="opt" data-do="rename">Rename</button>
+    <button class="opt" data-do="diag">Diagnose the connection</button>
+    <button class="opt" data-do="pair">${paired ? "Pair the remote again" : "Pair the remote"}</button>
+    <button class="opt" data-do="rescan">Look for new controls</button>
+    <button class="opt" data-do="auto">Automatic behaviour</button>
+    <button class="opt" data-do="siri">Siri and home screen buttons</button>
+    <button class="opt" data-do="apps">Quick app buttons</button>
+    <button class="opt" data-do="borrow">Volume from another device</button>
+    <button class="opt" data-do="tech">Technical detail</button>
+    <button class="opt danger" data-do="forget">Forget this device</button>`);
+
+  veil.querySelectorAll("[data-do]").forEach(el => {
+    el.onclick = async () => {
+      const action = el.dataset.do;
+      try {
+        if (action === "rename") {
+          const name = prompt("Name this device", d.name);
+          if (!name) return;
+          await api(`/api/devices/${id}`,
+            { method: "PATCH", body: JSON.stringify({ name: name.trim() }) });
+        } else if (action === "diag") {
+          veil.remove(); return diagnose(id);
+        } else if (action === "pair") {
+          veil.remove(); return pair(id);
+        } else if (action === "rescan") {
+          el.textContent = "Looking…";
+          const r = await api(`/api/devices/${id}/escalate`, { method: "POST" });
+          alert((r.gained || []).length
+            ? "Added: " + r.gained.join(", ")
+            : "Nothing new. The device is offering everything it has.");
+        } else if (action === "auto") {
+          const opts = { ...(d.options || {}) };
+          const minutes = prompt(
+            "Switch off automatically when no button has been pressed for how "
+            + "many minutes?\n\n0 turns this off.", String(opts.idle_off || 0));
+          if (minutes === null) return;
+          opts.idle_off = Math.max(0, parseInt(minutes, 10) || 0);
+          opts.alert_when_away = confirm(
+            "Also send a Telegram message if this device comes on while "
+            + "nobody is home?");
+          await api(`/api/devices/${id}`,
+            { method: "PATCH", body: JSON.stringify({ options: opts }) });
+        } else if (action === "siri") {
+          veil.remove();
+          return siriHelp();
+        } else if (action === "apps") {
+          veil.remove();
+          return chooseApps(id);
+        } else if (action === "borrow") {
+          const others = devices.filter(o => o.id !== id);
+          if (!others.length) return alert("There is no other device to use.");
+          const current = (d.delegates || {}).volume;
+          const list = others.map((o, i) =>
+            `${i + 1}. ${o.name}${o.id === current ? "  (in use)" : ""}`).join("\n");
+          const pick = prompt(
+            "Which device owns the volume in this room?\n\n" + list +
+            "\n\n0. Use this device's own volume", current
+              ? String(others.findIndex(o => o.id === current) + 1) : "1");
+          if (pick === null) return;
+          const index = parseInt(pick, 10);
+          const delegates = { ...(d.delegates || {}) };
+          if (index === 0) { delete delegates.volume; delete delegates.mute; }
+          else {
+            const chosen = others[index - 1];
+            if (!chosen) return;
+            delegates.volume = chosen.id;
+            delegates.mute = chosen.id;
+          }
+          await api(`/api/devices/${id}`,
+            { method: "PATCH", body: JSON.stringify({ delegates }) });
+        } else if (action === "tech") {
+          veil.remove();
+          return sheet(`<h2>Technical detail</h2>
+            <span class="micro">how commands reach this device</span>
+            <div class="nums">${(d.channels || []).map(c =>
+              `${esc(c.driver)} — ${(c.capabilities || []).join(", ")}`
+              ).join("<br>")}<br><br>mac ${esc(d.mac || "n/a")}<br>
+              ip ${esc(d.ip || "n/a")}</div>`);
+        } else if (action === "forget") {
+          if (!confirm(`Remove ${d.name}? Its pairing is lost too.`)) return;
+          await api(`/api/devices/${id}`, { method: "DELETE" });
+          veil.remove();
+          view.id = null; view.tab = "devices";
+          return load();
+        }
+        veil.remove();
+        await load();
+      } catch (e) { alert(e.message); }
+    };
+  });
+}
+
+function siriHelp() {
+  const base = `${location.protocol}//${location.host}`;
+  const names = scenesList.length
+    ? scenesList.map(s => s.name)
+    : ["Film night"];
+  sheet(`<h2>Siri and home screen buttons</h2>
+    <span class="micro">runs a scene without opening this app</span>
+    <div class="rep ok"><h3>Once, in the Shortcuts app</h3>
+      <p>New shortcut → Get Contents of URL → paste the address below →
+      name the shortcut whatever you want to say to Siri.</p>
+      <p class="do"><b>then</b>Say it to Siri, add it to the home screen, or
+      put it on the Action button.</p></div>
+    <div class="nums">${names.map(n =>
+      `${esc(base)}/api/run/${encodeURIComponent(n)}?token=${esc(token)}`
+      ).join("<br><br>")}</div>
+    <div class="rep warn"><h3>Two things worth knowing</h3>
+      <p>The address carries your hub token, so treat it like a password.
+      It only runs scenes that already exist - it cannot change anything.</p>
+      <p class="do"><b>away from home</b>Switch on WireGuard first, and use
+      the 10.0.0.1 address instead.</p></div>`);
+}
+
+async function chooseApps(id) {
+  const d = dev(id);
+  let catalog = [];
+  try { catalog = (await api("/api/app-catalog")).catalog || []; }
+  catch (e) { return alert(e.message); }
+
+  let chosen = (d.apps || []).map(a => a.name);
+  if (!chosen.length) chosen = appsOf(d);
+
+  const veil = sheet(`<h2>Quick app buttons</h2>
+    <span class="micro">pick up to four · tap to add or remove</span>
+    <div id="applist"></div>
+    <button class="opt" id="appsave" style="background:var(--signal);
+      color:#12161E;border:none;font-weight:650">Save</button>`);
+
+  const paint = () => {
+    veil.querySelector("#applist").innerHTML = catalog.map(a => `
+      <button class="opt${chosen.includes(a.name) ? "" : ""}" data-app="${esc(a.name)}"
+        style="${chosen.includes(a.name)
+          ? "border-color:var(--signal);color:var(--signal)" : ""}">
+        ${chosen.includes(a.name) ? "✓  " : ""}${esc(a.name)}</button>`).join("");
+    veil.querySelectorAll("[data-app]").forEach(el => {
+      el.onclick = () => {
+        const name = el.dataset.app;
+        if (chosen.includes(name)) chosen = chosen.filter(n => n !== name);
+        else if (chosen.length >= 4) return alert("Four is the maximum. Remove one first.");
+        else chosen.push(name);
+        paint();
+      };
+    });
+  };
+  paint();
+
+  veil.querySelector("#appsave").onclick = async () => {
+    const apps = chosen.map(name =>
+      catalog.find(a => a.name === name)).filter(Boolean);
+    try {
+      await api(`/api/devices/${id}`,
+        { method: "PATCH", body: JSON.stringify({ apps }) });
+      veil.remove();
+      await load();
+    } catch (e) { alert(e.message); }
+  };
+}
+
+async function pair(id) {
+  try {
+    await api(`/api/devices/${id}/pair`, { method: "POST" });
+    const code = prompt("Look at the television now.\n\n" +
+      "A six-digit code is on the screen. Type it here:");
+    if (!code) return;
+    await api(`/api/devices/${id}/pair/confirm`,
+      { method: "POST", body: JSON.stringify({ code: code.trim() }) });
+    await load();
+  } catch (e) { alert(e.message); }
+}
+
+async function diagnose(id) {
+  const veil = sheet(`<h2>Testing…</h2>
+    <span class="micro">this takes about fifteen seconds</span>`);
+  try {
+    const r = await api(`/api/devices/${id}/diagnose`, { method: "POST" });
+    const m = r.measurements || {};
+    const line = (label, data) => data
+      ? `${label} ${Math.round(data.avg ?? 0)} ms · swing ${Math.round(data.jitter ?? 0)} ms · loss ${Math.round(data.loss ?? 0)}%`
+      : `${label} no reply`;
+    veil.querySelector(".sheet").innerHTML = `
+      <h2>${r.verdict === "ok" ? "Nothing wrong on the network"
+        : r.verdict === "warn" ? "Something is slowing this down"
+        : "Found a real problem"}</h2>
+      <span class="micro">${(r.findings || []).length} finding(s)</span>
+      ${(r.findings || []).map(f => `<div class="rep ${f.severity}">
+        <h3>${esc(f.headline)}</h3><p>${esc(f.because)}</p>
+        <p class="do"><b>what fixes it</b>${esc(f.fix)}</p></div>`).join("")}
+      <div class="nums">${esc(line("tv      ", m.device))}<br>
+        ${esc(line("router  ", m.router))}<br>
+        ${esc(line("internet", m.internet))}</div>
+      <button class="close">Close</button>`;
+    veil.querySelector(".close").onclick = () => veil.remove();
+  } catch (e) {
+    veil.querySelector("h2").textContent = e.message;
+  }
+}
+
+async function discover() {
+  const scan = document.getElementById("scan");
+  scan.textContent = "Scanning the network…";
+  try {
+    const r = await api("/api/discover", { method: "POST" });
+    const list = r.candidates || [];
+    const veil = sheet(`<h2>Found on your network</h2>
+      <span class="micro">${list.length} controllable</span>
+      ${list.length ? list.map((c, i) => `<button class="found" data-i="${i}"
+          ${c.already_added ? "disabled" : ""}>
+          <div class="t">${esc(c.name)}${c.already_added ? " · added" : ""}</div>
+          <div class="micro">${esc(c.ip || c.target)}</div></button>`).join("")
+        : `<div class="empty">Nothing here speaks a protocol the hub knows.</div>`}`);
+    veil.querySelectorAll(".found").forEach(el => {
+      el.onclick = async () => {
+        el.querySelector(".t").textContent = "Setting up…";
+        try {
+          const res = await api("/api/devices", { method: "POST",
+            body: JSON.stringify({ target: list[el.dataset.i].target }) });
+          veil.remove();
+          await load();
+          if ((res.notes || []).length) alert(res.notes.join("\n\n"));
+        } catch (e) { el.querySelector(".t").textContent = e.message; }
+      };
+    });
+  } catch (e) { alert(e.message); }
+  scan.textContent = "＋ Add a device";
+}
+
+/* ================================================================ roaming */
+async function alive(origin, ms = 2500) {
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), ms);
+  try {
+    const res = await fetch(origin + "/api/health", { signal: stop.signal });
+    return res.ok ? res.json() : null;
+  } catch (e) { return null; } finally { clearTimeout(timer); }
+}
+
+async function rememberHosts() {
+  const health = await alive("");
+  if (health && health.hosts) {
+    try { localStorage.setItem(HOSTS_KEY, JSON.stringify(health.hosts)); }
+    catch (e) {}
+    return true;
+  }
+  return false;
+}
+
+async function findHub() {
+  let hosts = [];
+  try { hosts = JSON.parse(localStorage.getItem(HOSTS_KEY) || "[]"); }
+  catch (e) {}
+  for (const host of hosts) {
+    if (host === location.host) continue;
+    const origin = `${location.protocol}//${host}`;
+    if (await alive(origin)) { location.replace(origin + "/"); return true; }
+  }
+  return false;
+}
+
+/* ================================================================ boot */
+async function load() {
+  try {
+    devices = (await api("/api/devices")).devices || [];
+    try {
+      const bundle = await api("/api/scenes");
+      scenesList = bundle.scenes || [];
+      recording = bundle.recording || recording;
+    } catch (e) {}
+    render();
+    if (view.tab === "remote" && view.id) refresh(view.id);
+  } catch (e) {
+    if (!token) return;
+    root.innerHTML = `<div class="empty"><b>Looking for the hub…</b>
+      Trying its other address.</div>`;
+    if (await findHub()) return;
+    root.innerHTML = `<div class="empty"><b>Cannot reach the hub</b>
+      At home, join the house Wi-Fi. Away from home, switch on WireGuard.</div>`;
+  }
+}
+
+async function boot() {
+  if (!token) { pairing(); rememberHosts(); return; }
+  if (!(await rememberHosts()) && await findHub()) return;
+  load();
+}
+boot();
+
+</script>
+<style>
+#tvnote{position:fixed;inset:0;z-index:99999;background:#0b0e17;display:none;padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));color:#fff;font-family:-apple-system,system-ui,sans-serif;overflow:auto}
+#tvnote canvas{width:100%;aspect-ratio:3/2;background:#1d2030;border-radius:18px;display:block;touch-action:none}
+#tvnote .r{display:flex;gap:10px;margin:12px 0;align-items:center;flex-wrap:wrap}
+#tvnote .c{width:30px;height:30px;border-radius:50%;border:3px solid transparent}#tvnote .c.on{border-color:#fff}
+#tvnote button{border:0;border-radius:14px;padding:12px 16px;font-size:16px;background:#2a2f45;color:#fff}
+#tvnote #tn-send{width:100%;background:#fff;color:#111;font-weight:600;padding:16px;font-size:18px}
+#tvnote input{width:100%;box-sizing:border-box;border-radius:14px;border:0;padding:12px;font-size:16px;background:#1d2030;color:#fff}
+</style>
+<div id="tvnote"><h2 style="margin:4px 0 12px;font-size:20px">Leave a note on the TV</h2>
+<canvas id="tn-cv" width="900" height="600"></canvas><div class="r" id="tn-cols"></div>
+<div class="r"><button id="tn-u">Undo</button><button id="tn-cl">Clear</button><button id="tn-1">Thin</button><button id="tn-2">Medium</button><button id="tn-3">Thick</button></div>
+<input id="tn-tx" maxlength="120" placeholder="Or type a short message">
+<p></p><button id="tn-send">Send to TV</button><p id="tn-st" style="text-align:center;min-height:24px"></p>
+<button id="tn-x" style="width:100%">Close</button></div>
+<script>
+(function(){
+var cv=document.getElementById('tn-cv'),x=cv.getContext('2d'),col='#fff',w=6,down=false,hist=[],drawn=false;
+x.lineCap='round';x.lineJoin='round';
+['#ffffff','#ffd24a','#ff8a3d','#ff4f9a','#a56bff','#4da3ff','#4ddb8a','#ff4d4d'].forEach(function(c,i){
+ var d=document.createElement('div');d.className='c'+(i==0?' on':'');d.style.background=c;
+ d.onclick=function(){col=c;[].forEach.call(document.querySelectorAll('#tvnote .c'),function(e){e.classList.remove('on')});d.classList.add('on')};
+ document.getElementById('tn-cols').appendChild(d)});
+function pos(e){var r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]}
+cv.addEventListener('pointerdown',function(e){down=true;drawn=true;hist.push(x.getImageData(0,0,cv.width,cv.height));if(hist.length>20)hist.shift();
+ var p=pos(e);x.strokeStyle=col;x.lineWidth=w;x.beginPath();x.moveTo(p[0],p[1]);x.lineTo(p[0]+0.1,p[1]);x.stroke();e.preventDefault()});
+cv.addEventListener('pointermove',function(e){if(!down)return;var p=pos(e);x.lineTo(p[0],p[1]);x.stroke();e.preventDefault()});
+window.addEventListener('pointerup',function(){down=false});
+document.getElementById('tn-u').onclick=function(){var h=hist.pop();if(h)x.putImageData(h,0,0)};
+document.getElementById('tn-cl').onclick=function(){x.clearRect(0,0,cv.width,cv.height);hist=[];drawn=false};
+document.getElementById('tn-1').onclick=function(){w=3};document.getElementById('tn-2').onclick=function(){w=6};document.getElementById('tn-3').onclick=function(){w=12};
+var box=document.getElementById('tvnote');
+window.openNote=function(){box.style.display='block'};
+document.getElementById('tn-x').onclick=function(){box.style.display='none'};
+document.getElementById('tn-send').onclick=function(){
+ var st=document.getElementById('tn-st'),t=document.getElementById('tn-tx').value;
+ if(!drawn&&!t){st.textContent='Draw or type something first';return}
+ var bg=document.createElement('canvas');bg.width=cv.width;bg.height=cv.height;var b=bg.getContext('2d');b.fillStyle='#1d2030';b.fillRect(0,0,bg.width,bg.height);b.drawImage(cv,0,0);
+ st.textContent='Sending...';
+ fetch('/api/tv/note',{method:'POST',headers:{'X-Hub-Token':token,'Content-Type':'application/json'},body:JSON.stringify({img:drawn?bg.toDataURL('image/png'):'',text:t})})
+ .then(function(r){return r.json()}).then(function(j){if(j.ok){st.textContent='Sent to the TV';if(window.loadTv)loadTv();x.clearRect(0,0,cv.width,cv.height);drawn=false;document.getElementById('tn-tx').value=''}else{st.textContent='Could not reach the TV'}})
+ .catch(function(){st.textContent='Could not send'})};
+})();
+</script>
+</body>
+</html>

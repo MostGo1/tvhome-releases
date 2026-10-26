@@ -391,6 +391,11 @@ function remoteBody(id) {
           <button class="btn${overlaysOff ? " on" : ""}" data-overlay="${id}">
             ${overlaysOff ? "Video included" : "Include the video"}</button>
         </div>
+        <div class="row" style="margin-top:8px">
+          <button class="btn" data-snap="${id}">Screenshot</button>
+          ${[15, 30, 60].map(n => `<button class="btn" data-rec="${id}" data-sec="${n}">Record ${n}s</button>`).join("")}
+        </div>
+        <div class="note" id="cap-${id}"></div>
         <div class="note" id="fps-${id}"></div></div>`;
   }
 
@@ -500,6 +505,32 @@ function appsOf(d) {
 function needsPairing(d) {
   return (d.channels || []).some(
     c => c.driver === "androidtv_remote" && c.config && !c.config.paired);
+}
+
+/* ================================================================ capture helpers */
+const stamp = () => new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+function capSay(id, text, bad) {
+  const n = document.getElementById("cap-" + id);
+  if (n) { n.className = "note" + (bad ? " bad" : ""); n.textContent = text; }
+}
+/* Sharing needs a fresh tap on iPhone, so the finished file waits behind a button. */
+function offerSave(id, blob, name, kind) {
+  const n = document.getElementById("cap-" + id);
+  if (!n) return;
+  n.className = "note";
+  n.innerHTML = `<button class="btn wide" style="width:100%;background:var(--signal);color:#12161E;border:none;font-weight:650">
+    Save ${kind} (${(blob.size / 1048576).toFixed(1)} MB)</button>`;
+  n.firstChild.onclick = async () => {
+    const file = new File([blob], name, { type: blob.type });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] }); return;
+      }
+    } catch (e) { if (e.name === "AbortError") return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
 }
 
 /* ================================================================ tabs */
@@ -944,6 +975,38 @@ function wireCommon() {
       screenTarget = el.dataset.speed;
       document.querySelectorAll("[data-speed]").forEach(
         other => other.classList.toggle("on", other === el));
+    };
+  });
+
+  document.querySelectorAll("[data-snap]").forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.snap;
+      capSay(id, "Taking the screenshot…");
+      try {
+        const res = await fetch(`/api/devices/${id}/screen?w=1920&q=92&fast=0&t=${Date.now()}`,
+          { headers: { "X-Hub-Token": token } });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "capture failed");
+        offerSave(id, await res.blob(), "tv-" + stamp() + ".jpg", "screenshot");
+      } catch (e) { capSay(id, e.message, true); }
+    };
+  });
+
+  document.querySelectorAll("[data-rec]").forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.rec, sec = Number(el.dataset.sec), d = dev(id);
+      try {
+        await api(`/api/devices/${id}/record`, { method: "POST",
+          body: JSON.stringify({ seconds: sec, ip: d && d.ip }) });
+        for (let left = sec; left > 0; left--) {
+          capSay(id, `Recording… ${left}s`);
+          await new Promise(r => setTimeout(r, 1000));
+        }
+        capSay(id, "Fetching the video…");
+        const res = await fetch(`/api/devices/${id}/record/file?ip=${encodeURIComponent((d && d.ip) || "")}`,
+          { headers: { "X-Hub-Token": token } });
+        if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "no video");
+        offerSave(id, await res.blob(), "tv-" + stamp() + ".mp4", "video");
+      } catch (e) { capSay(id, e.message, true); }
     };
   });
 

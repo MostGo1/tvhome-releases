@@ -53,6 +53,87 @@ def api_tv(sub):
     app = app.replace('@app.route("/api/audit")', route + '@app.route("/api/audit")', 1)
     open(APP, "w").write(app)
 
+if "def api_record(" not in app:
+    rec = r'''
+# ---- Screen recording on a TV through adb (saved only on the phone) ----
+_REC = {}
+
+def _rec_ip(raw):
+    import ipaddress
+    try:
+        if ipaddress.ip_address(str(raw or "")).is_private:
+            return str(raw)
+    except Exception:
+        pass
+    return None
+
+@app.route("/api/devices/<dev_id>/record", methods=["POST"])
+@require_token
+def api_record(dev_id):
+    import shutil, subprocess
+    data = request.get_json(silent=True) or {}
+    ip = _rec_ip(data.get("ip"))
+    adb = shutil.which("adb")
+    if not ip:
+        return jsonify({"error": "bad device address"}), 400
+    if not adb:
+        return jsonify({"error": "adb is not installed on the hub"}), 501
+    try:
+        sec = max(5, min(120, int(data.get("seconds") or 15)))
+    except Exception:
+        sec = 15
+    tgt = ip + ":5555"
+    try:
+        subprocess.run([adb, "connect", tgt], timeout=8, capture_output=True)
+        old = _REC.pop(ip, None)
+        if old and old.poll() is None:
+            old.kill()
+        _REC[ip] = subprocess.Popen([adb, "-s", tgt, "shell", "screenrecord",
+            "--time-limit", str(sec), "--size", "1280x720", "--bit-rate", "3000000",
+            "/sdcard/hubrec.mp4"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception as e:
+        return jsonify({"error": "could not start: " + str(e)}), 502
+    return jsonify({"ok": True})
+
+@app.route("/api/devices/<dev_id>/record/file")
+@require_token
+def api_record_file(dev_id):
+    import os, shutil, subprocess, tempfile, time as _t
+    ip = _rec_ip(request.args.get("ip"))
+    adb = shutil.which("adb")
+    if not ip or not adb:
+        return jsonify({"error": "bad request"}), 400
+    p = _REC.get(ip)
+    if p:
+        try:
+            p.wait(timeout=45)
+        except Exception:
+            return jsonify({"error": "the TV is still recording, try again"}), 504
+    _t.sleep(1)
+    tgt = ip + ":5555"
+    fd, local = tempfile.mkstemp(suffix=".mp4")
+    os.close(fd)
+    try:
+        r = subprocess.run([adb, "-s", tgt, "pull", "/sdcard/hubrec.mp4", local],
+                           timeout=60, capture_output=True)
+        if r.returncode != 0 or os.path.getsize(local) < 1000:
+            return jsonify({"error": "The TV gave no video. Protected apps such as Netflix block recording."}), 502
+        data = open(local, "rb").read()
+        subprocess.run([adb, "-s", tgt, "shell", "rm", "/sdcard/hubrec.mp4"],
+                       timeout=10, capture_output=True)
+        return app.response_class(data, mimetype="video/mp4")
+    except Exception as e:
+        return jsonify({"error": "could not fetch: " + str(e)}), 502
+    finally:
+        try:
+            os.remove(local)
+        except Exception:
+            pass
+
+'''
+    app = app.replace('@app.route("/api/audit")', rec + '@app.route("/api/audit")', 1)
+    open(APP, "w").write(app)
+
 open(HTML, "w").write(new)
 
 subprocess.call("pkill -f app.py", shell=True)

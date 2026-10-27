@@ -53,7 +53,7 @@ def api_tv(sub):
     app = app.replace('@app.route("/api/audit")', route + '@app.route("/api/audit")', 1)
     open(APP, "w").write(app)
 
-if "def api_record(" not in app:
+if "def api_screenrec(" not in app:
     rec = r'''
 # ---- Screen recording on a TV through adb (saved only on the phone) ----
 _REC = {}
@@ -69,7 +69,7 @@ def _rec_ip(raw):
 
 @app.route("/api/devices/<dev_id>/record", methods=["POST"])
 @require_token
-def api_record(dev_id):
+def api_screenrec(dev_id):
     import shutil, subprocess
     data = request.get_json(silent=True) or {}
     ip = _rec_ip(data.get("ip"))
@@ -97,7 +97,7 @@ def api_record(dev_id):
 
 @app.route("/api/devices/<dev_id>/record/file")
 @require_token
-def api_record_file(dev_id):
+def api_screenrec_file(dev_id):
     import os, shutil, subprocess, tempfile, time as _t
     ip = _rec_ip(request.args.get("ip"))
     adb = shutil.which("adb")

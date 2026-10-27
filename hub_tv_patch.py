@@ -11,7 +11,8 @@ if not KEY:
 
 APP = "/opt/hub/app.py"
 HTML = "/opt/hub/web/index.html"
-URL = "https://raw.githubusercontent.com/MostGo1/tvhome-releases/main/hub_ui/index.html"
+REF = sys.argv[3] if len(sys.argv) > 3 else "main"
+URL = "https://raw.githubusercontent.com/MostGo1/tvhome-releases/" + REF + "/hub_ui/index.html"
 
 app = open(APP).read()
 if "@require_token" not in app or '@app.route("/api/audit")' not in app:
@@ -139,4 +140,5 @@ open(HTML, "w").write(new)
 subprocess.call(["pkill", "-f", "[v]env/bin/python3 app.py"])
 time.sleep(1)
 subprocess.Popen(["venv/bin/python3", "app.py"], cwd="/opt/hub", stdout=open("/opt/hub/hub.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
+print("Routes installed:", sum(open(APP).read().count(n) for n in ("def api_tv(", "def api_screenrec(", "def api_screenrec_file(")), "of 3")
 print("Done. Backups end with .bak-" + stamp + ". Open the God Remote app and pull down to reload.")

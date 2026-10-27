@@ -136,7 +136,7 @@ def api_record_file(dev_id):
 
 open(HTML, "w").write(new)
 
-subprocess.call("pkill -f app.py", shell=True)
+subprocess.call(["pkill", "-f", "[v]env/bin/python3 app.py"])
 time.sleep(1)
-subprocess.Popen("cd /opt/hub && nohup venv/bin/python3 app.py > /opt/hub/hub.log 2>&1 &", shell=True)
+subprocess.Popen(["venv/bin/python3", "app.py"], cwd="/opt/hub", stdout=open("/opt/hub/hub.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
 print("Done. Backups end with .bak-" + stamp + ". Open the God Remote app and pull down to reload.")

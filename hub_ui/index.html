@@ -983,7 +983,7 @@ function wireCommon() {
       const id = el.dataset.snap;
       capSay(id, "Taking the screenshot…");
       try {
-        const res = await fetch(`/api/devices/${id}/screen?w=1920&q=92&fast=0&t=${Date.now()}`,
+        const res = await fetch(`/api/devices/${id}/screen?w=1280&q=85&fast=1&t=${Date.now()}`,
           { headers: { "X-Hub-Token": token } });
         if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "capture failed");
         offerSave(id, await res.blob(), "tv-" + stamp() + ".jpg", "screenshot");

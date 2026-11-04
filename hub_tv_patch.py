@@ -135,10 +135,41 @@ def api_screenrec_file(dev_id):
     app = app.replace('@app.route("/api/audit")', rec + '@app.route("/api/audit")', 1)
     open(APP, "w").write(app)
 
+if "def api_longpress(" not in app:
+    lp = r'''
+# ---- Real long press of a remote key on a TV (adb input keyevent --longpress) ----
+@app.route("/api/devices/<dev_id>/longpress", methods=["POST"])
+@require_token
+def api_longpress(dev_id):
+    import shutil, subprocess
+    data = request.get_json(silent=True) or {}
+    ip = _rec_ip(data.get("ip"))
+    adb = shutil.which("adb")
+    codes = {"ok": 23, "back": 4, "home": 3, "menu": 82, "up": 19, "down": 20, "left": 21, "right": 22}
+    code = codes.get(str(data.get("key") or ""))
+    if not ip or not code:
+        return jsonify({"error": "bad request"}), 400
+    if not adb:
+        return jsonify({"error": "adb is not installed on the hub"}), 501
+    tgt = ip + ":5555"
+    try:
+        subprocess.run([adb, "connect", tgt], timeout=8, capture_output=True)
+        r = subprocess.run([adb, "-s", tgt, "shell", "input", "keyevent", "--longpress", str(code)],
+                           timeout=10, capture_output=True)
+        if r.returncode != 0:
+            return jsonify({"error": "the TV refused the key"}), 502
+    except Exception as e:
+        return jsonify({"error": "could not send: " + str(e)}), 502
+    return jsonify({"ok": True})
+
+'''
+    app = app.replace('@app.route("/api/audit")', lp + '@app.route("/api/audit")', 1)
+    open(APP, "w").write(app)
+
 open(HTML, "w").write(new)
 
 subprocess.call(["pkill", "-f", "[v]env/bin/python3 app.py"])
 time.sleep(1)
 subprocess.Popen(["venv/bin/python3", "app.py"], cwd="/opt/hub", stdout=open("/opt/hub/hub.log", "ab"), stderr=subprocess.STDOUT, start_new_session=True)
-print("Routes installed:", sum(open(APP).read().count(n) for n in ("def api_tv(", "def api_screenrec(", "def api_screenrec_file(")), "of 3")
+print("Routes installed:", sum(open(APP).read().count(n) for n in ("def api_tv(", "def api_screenrec(", "def api_screenrec_file(", "def api_longpress(")), "of 4")
 print("Done. Backups end with .bak-" + stamp + ". Open the God Remote app and pull down to reload.")

@@ -401,7 +401,7 @@ function remoteBody(id) {
 
   if (caps.includes("navigation")) {
     html += `<div class="surface" data-surface="${id}"><div class="ripple"></div>
-      <div class="hint">swipe · move<br>tap · select</div></div>`;
+      <div class="hint">swipe · move<br>tap · select<br>hold · long press</div></div>`;
     html += `<div class="sect"><div class="row">
       ${button(id, "navigation", "back", "Back")}
       ${button(id, "navigation", "home", "Home")}
@@ -820,10 +820,25 @@ function wireRemote(id) {
       r.style.left = (x - box.left) + "px"; r.style.top = (y - box.top) + "px";
       pad.classList.add("hit"); setTimeout(() => pad.classList.remove("hit"), 200);
     };
+    let hold = null, held = false;
     pad.addEventListener("touchstart", ev => {
-      const t = ev.touches[0]; sx = t.clientX; sy = t.clientY;
+      const t = ev.touches[0]; sx = t.clientX; sy = t.clientY; held = false;
+      clearTimeout(hold);
+      hold = setTimeout(() => {
+        held = true;
+        if (navigator.vibrate) navigator.vibrate(30);
+        flash(sx, sy);
+        longPress(pad.dataset.surface, "ok");
+      }, 550);
     }, { passive: true });
+    pad.addEventListener("touchmove", ev => {
+      const t = ev.touches[0];
+      if (Math.hypot(t.clientX - sx, t.clientY - sy) > 26) clearTimeout(hold);
+    }, { passive: true });
+    pad.addEventListener("touchcancel", () => clearTimeout(hold), { passive: true });
     pad.addEventListener("touchend", ev => {
+      clearTimeout(hold);
+      if (held) { held = false; return; }
       const t = ev.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
       flash(t.clientX, t.clientY);
       if (Math.hypot(dx, dy) < 26) return send(pad.dataset.surface, "navigation", "ok");
@@ -909,12 +924,47 @@ function repeatable(el, fire) {
     ev => el.addEventListener(ev, stop, { passive: true }));
 }
 
+/* A real long press (not a repeat): hold Back, Home or Menu, or hold the touch pad still. */
+async function longPress(id, key) {
+  const d = dev(id), note = document.getElementById("t-" + id);
+  try {
+    await api(`/api/devices/${id}/longpress`,
+      { method: "POST", body: JSON.stringify({ ip: d && d.ip, key }) });
+    if (note) { note.className = "note"; note.textContent = "long press: " + key; }
+  } catch (e) {
+    if (note) { note.className = "note bad"; note.textContent = e.message; }
+  }
+}
+
+function holdable(el, tap, long) {
+  let timer = null, fired = false;
+  const clear = () => { clearTimeout(timer); timer = null; };
+  el.addEventListener("touchstart", () => {
+    fired = false;
+    timer = setTimeout(() => {
+      fired = true; timer = null;
+      if (navigator.vibrate) navigator.vibrate(30);
+      el.classList.add("on"); setTimeout(() => el.classList.remove("on"), 250);
+      long();
+    }, 550);
+  }, { passive: true });
+  ["touchend", "touchcancel", "touchmove"].forEach(
+    ev => el.addEventListener(ev, clear, { passive: true }));
+  el.style.webkitTouchCallout = "none";
+  el.style.userSelect = "none";
+  el.onclick = ev => { if (fired) { fired = false; ev.preventDefault(); return; } tap(); };
+}
+
 function wireCommon() {
   document.querySelectorAll("[data-cap][data-val]").forEach(el => {
     const fire = () => send(el.dataset.dev, el.dataset.cap,
                             JSON.parse(el.dataset.val));
     el.onclick = fire;
-    if (el.dataset.cap === "navigation") repeatable(el, fire);
+    if (el.dataset.cap === "navigation") {
+      const v = JSON.parse(el.dataset.val);
+      if (["back", "home", "menu"].includes(v)) holdable(el, fire, () => longPress(el.dataset.dev, v));
+      else repeatable(el, fire);
+    }
   });
 
   document.querySelectorAll("[data-sleep]").forEach(el => {
